@@ -1,0 +1,52 @@
+[33mcommit 05354cc055443fe73b25811ce2bb85ece9d0c084[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmaster[m[33m)[m
+Author: stefanopiga <stefanopiga1976@gmail.com>
+Date:   Mon Oct 6 21:24:36 2025 +0200
+
+    feat(story-5.1): Complete project structure security refactoring
+    
+    BREAKING CHANGE: Script operativi spostati da root a scripts/
+    
+    Security: Eliminate credenziali hardcoded, creato .env.example, aggiornato .gitignore
+    
+    Structure: Creata directory scripts/, tests/integration/, docs/qa/reports/ organizzate
+    
+    Scripts: generate_jwt.py, ingest_single_document.py, verify_ingestion.py con python-dotenv
+    
+    Documentation: README completi per scripts/, admin/, ingestion/, tests/
+    
+    Files: Created 24, Modified 2, Deleted 5, Moved 15+
+    
+    All AC verified, DoD satisfied, Security risk P0 RESOLVED
+    
+    Implementation Report: STORY_5.1_IMPLEMENTATION_REPORT.md
+    
+    Closes #5.1
+
+ .env.example                                       |   39 [32m+[m[31m-[m
+ .gitignore                                         |   10 [32m+[m
+ STORY_5.1_IMPLEMENTATION_REPORT.md                 |  395 [32m++++++[m
+ .../qa/reports/2.4.1/completion_report.md          |    0
+ .../qa/reports/2.4.1/deployment_success.md         |    0
+ docs/qa/reports/2.4.1/final_completion_report.md   |  370 [32m+++++[m
+ docs/qa/reports/2.4.1/update_summary.md            |  131 [32m++[m
+ docs/qa/reports/2.4.2/implementation_report.md     |  465 [32m+++++++[m
+ docs/qa/reports/2.4.2/status_update.md             |  230 [32m++++[m
+ docs/qa/reports/2.4.2/test_report_final.md         |  348 [32m+++++[m
+ .../qa/reports/4.4/test_report_20251005.md         |    0
+ .../qa/reports/misc/analytics_fix_analysis.md      |    0
+ .../qa/reports/misc/code_review_4.2.md             |    0
+ .../qa/reports/misc/deployment_checklist_4.4.md    |    0
+ .../qa/reports/misc/documentation_update_4.4.md    |    0
+ .../qa/reports/misc/final_status_report_4.4.md     |    0
+ .../qa/reports/misc/integration_report_4.4.md      |    0
+ .../qa/reports/misc/test_fix_report_4.4.md         |    0
+ .../5.1-project-structure-security-refactoring.md  | 1442 [32m++++++++++++++++++++[m
+ scripts/README.md                                  |  134 [32m++[m
+ scripts/admin/README.md                            |   17 [32m+[m
+ scripts/admin/generate_jwt.py                      |  100 [32m++[m
+ scripts/ingestion/README.md                        |   28 [32m+[m
+ scripts/ingestion/ingest_single_document.py        |  152 [32m+++[m
+ scripts/ingestion/verify_ingestion.py              |   98 [32m++[m
+ scripts/requirements.txt                           |    7 [32m+[m
+ tests/README.md                                    |   23 [32m+[m
+ 27 files changed, 3984 insertions(+), 5 deletions(-)
