@@ -8,7 +8,8 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.11"
 fastapi = "^0.116.1"
-uvicorn = "^0.35.0"
+uvicorn = {version = "^0.35.0", extras = ["standard"]}
+uvloop = {version = "^0.19.0", markers = "sys_platform != 'win32'"}
 pyjwt = "^2.10.1"
 python-dotenv = "^1.1.1"
 python-docx = "^1.1.2"
@@ -25,6 +26,7 @@ slowapi = "^0.1.9"
 celery = {version = "^5.4.0", extras = ["redis"]}
 asyncpg = "^0.30.0"
 # Story 7.1: tiktoken già fornito da langchain-openai (>=0.7,<1)
+sentence-transformers = "^2.2.2"  # Story 7.2: Cross-encoder models for re-ranking
 
 
 [tool.poetry.group.dev.dependencies]

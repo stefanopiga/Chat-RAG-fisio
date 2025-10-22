@@ -37,6 +37,8 @@ from ..services.rate_limit_service import rate_limit_service
 from ..services.conversation_service import get_conversation_manager  # Story 7.1
 from ..dependencies import _auth_bridge, TokenPayload
 from ..knowledge_base.search import perform_semantic_search
+from ..knowledge_base.enhanced_retrieval import get_enhanced_retriever  # Story 7.2
+from ..knowledge_base.dynamic_retrieval import get_dynamic_strategy  # Story 7.2
 from ..models.answer_with_citations import AnswerWithCitations
 from ..models.enhanced_response import EnhancedAcademicResponse  # Story 7.1
 from ..prompts.academic_medical import (  # Story 7.1
@@ -215,19 +217,78 @@ def create_chat_message(
         resolved_chunks = [chunk for chunk in body.chunks if chunk]
     else:
         retrieval_started_at = time.time()
+        
+        # Story 7.2 AC2: Dynamic match count (se enabled)
+        effective_match_count = body.match_count
+        if settings.enable_dynamic_match_count:
+            try:
+                dynamic_strategy = get_dynamic_strategy(settings)
+                effective_match_count = dynamic_strategy.get_optimal_match_count(
+                    query=user_message,
+                    min_count=settings.dynamic_match_count_min,
+                    max_count=settings.dynamic_match_count_max,
+                    default_count=body.match_count,
+                )
+                logger.info({
+                    "event": "dynamic_match_count_computed",
+                    "query_preview": user_message[:100],
+                    "original_count": body.match_count,
+                    "computed_count": effective_match_count,
+                })
+            except Exception as exc:  # noqa: BLE001 - fallback a count originale
+                logger.warning({
+                    "event": "dynamic_match_count_failed",
+                    "error": str(exc),
+                    "fallback_count": body.match_count,
+                })
+                effective_match_count = body.match_count
+        
+        # Story 7.2 AC1: Enhanced retrieval con re-ranking (se enabled)
         try:
-            search_results = perform_semantic_search(
-                query=user_message,
-                match_count=body.match_count,
-                match_threshold=body.match_threshold,
-            )
-        except Exception as exc:  # noqa: BLE001 - loggato e fallback
-            logger.error({
-                "event": "semantic_search_error",
+            if settings.enable_cross_encoder_reranking:
+                # Use enhanced retrieval pipeline
+                retriever = get_enhanced_retriever(settings)
+                search_results = retriever.retrieve_and_rerank(
+                    query=user_message,
+                    match_count=effective_match_count,
+                    match_threshold=body.match_threshold,
+                    diversify=settings.enable_chunk_diversification,  # AC3: Diversification
+                )
+                logger.info({
+                    "event": "enhanced_retrieval_used",
+                    "session_id": sessionId,
+                    "match_count": effective_match_count,
+                    "diversify": settings.enable_chunk_diversification,
+                })
+            else:
+                # Use baseline semantic search
+                search_results = perform_semantic_search(
+                    query=user_message,
+                    match_count=effective_match_count,
+                    match_threshold=body.match_threshold,
+                )
+        except Exception as exc:  # noqa: BLE001 - fallback a baseline
+            logger.warning({
+                "event": "enhanced_retrieval_fallback",
                 "error": str(exc),
+                "action": "use_baseline_search",
                 "session_id": sessionId,
             })
-            search_results = []
+            # Graceful degradation: fallback a baseline search
+            try:
+                search_results = perform_semantic_search(
+                    query=user_message,
+                    match_count=effective_match_count,
+                    match_threshold=body.match_threshold,
+                )
+            except Exception as fallback_exc:  # noqa: BLE001
+                logger.error({
+                    "event": "semantic_search_error",
+                    "error": str(fallback_exc),
+                    "session_id": sessionId,
+                })
+                search_results = []
+        
         retrieval_time_ms = int((time.time() - retrieval_started_at) * 1000)
 
         for item in search_results or []:

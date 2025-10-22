@@ -189,6 +189,72 @@ class Settings(BaseSettings):
         description="Story 7.1: Maximum character length for compacted older messages",
     )
     
+    # Story 7.2: Advanced Retrieval Optimization feature flags
+    enable_cross_encoder_reranking: bool = Field(
+        default=False,
+        description="Story 7.2 AC1: Enable cross-encoder re-ranking for improved precision",
+    )
+    enable_dynamic_match_count: bool = Field(
+        default=False,
+        description="Story 7.2 AC2: Enable dynamic match count based on query complexity",
+    )
+    enable_chunk_diversification: bool = Field(
+        default=False,
+        description="Story 7.2 AC3: Enable chunk diversification to reduce document redundancy",
+    )
+    
+    # Story 7.2: Cross-encoder configuration
+    cross_encoder_model_name: str = Field(
+        default="cross-encoder/ms-marco-MiniLM-L-6-v2",
+        description="Story 7.2 AC1: Cross-encoder model for re-ranking",
+    )
+    cross_encoder_over_retrieve_factor: int = Field(
+        default=3,
+        ge=2,
+        le=5,
+        description="Story 7.2 AC1: Over-retrieval factor for re-ranking (3x = retrieve 3x target count)",
+    )
+    cross_encoder_threshold_post_rerank: float = Field(
+        default=0.6,
+        ge=0.0,
+        le=1.0,
+        description="Story 7.2 AC1: Threshold for filtering after re-ranking",
+    )
+    
+    # Story 7.2: Dynamic retrieval configuration
+    dynamic_match_count_min: int = Field(
+        default=5,
+        ge=3,
+        le=10,
+        description="Story 7.2 AC2: Minimum match count for simple queries",
+    )
+    dynamic_match_count_max: int = Field(
+        default=12,
+        ge=10,
+        le=20,
+        description="Story 7.2 AC2: Maximum match count for complex queries",
+    )
+    dynamic_match_count_default: int = Field(
+        default=8,
+        ge=5,
+        le=12,
+        description="Story 7.2 AC2: Default match count for normal queries",
+    )
+    
+    # Story 7.2: Diversification configuration
+    diversification_max_per_document: int = Field(
+        default=2,
+        ge=1,
+        le=5,
+        description="Story 7.2 AC3: Maximum chunks from same document in results",
+    )
+    diversification_preserve_top_n: int = Field(
+        default=3,
+        ge=1,
+        le=5,
+        description="Story 7.2 AC3: Number of top chunks to preserve regardless of diversification",
+    )
+    
     # Validatori custom
     @field_validator('supabase_url')
     @classmethod
