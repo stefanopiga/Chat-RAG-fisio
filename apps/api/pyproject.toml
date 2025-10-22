@@ -24,6 +24,7 @@ supabase = "^2.6.0"
 slowapi = "^0.1.9"
 celery = {version = "^5.4.0", extras = ["redis"]}
 asyncpg = "^0.30.0"
+# Story 7.1: tiktoken già fornito da langchain-openai (>=0.7,<1)
 
 
 [tool.poetry.group.dev.dependencies]

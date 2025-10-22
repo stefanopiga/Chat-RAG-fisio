@@ -15,7 +15,8 @@ temp_env_*
 *.swp
 *~
 
-#repository .bmad-core e cursor rules
+#repository .bmad-core e cursor rules e files vari
+ARCO.md
 .bmad-core/
 .cursor/
 /bmad-method

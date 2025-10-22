@@ -34,9 +34,15 @@ from ..schemas.chat import (
 from ..config import Settings, get_settings
 from ..services.chat_service import record_ag_latency_ms, get_llm
 from ..services.rate_limit_service import rate_limit_service
+from ..services.conversation_service import get_conversation_manager  # Story 7.1
 from ..dependencies import _auth_bridge, TokenPayload
 from ..knowledge_base.search import perform_semantic_search
 from ..models.answer_with_citations import AnswerWithCitations
+from ..models.enhanced_response import EnhancedAcademicResponse  # Story 7.1
+from ..prompts.academic_medical import (  # Story 7.1
+    BASELINE_PROMPT,
+    ACADEMIC_MEDICAL_SYSTEM_PROMPT,
+)
 from ..stores import chat_messages_store, feedback_store
 
 router = APIRouter(prefix="/api/v1/chat", tags=["Chat"])
@@ -254,6 +260,27 @@ def create_chat_message(
         "retrieval_time_ms": retrieval_time_ms,
     })
 
+    # Story 7.1: Load conversational context if enabled
+    conversation_history = ""
+    context_window = None
+    if settings.enable_conversational_memory:
+        conv_manager = get_conversation_manager(
+            max_turns=settings.conversation_max_turns,
+            max_tokens=settings.conversation_max_tokens,
+            compact_length=settings.conversation_message_compact_length,
+        )
+        context_window = conv_manager.get_context_window(sessionId)
+        conversation_history = conv_manager.format_for_prompt(context_window)
+        
+        logger.info({
+            "event": "context_window_loaded",
+            "session_id": sessionId,
+            "messages_count": len(context_window.messages),
+            "total_tokens": context_window.total_tokens,
+        })
+    else:
+        conversation_history = "\n=== PRIMA INTERAZIONE (nessuna cronologia) ===\n"
+    
     # Costruzione del contesto a partire dai chunk
     context_lines: list[str] = []
     for chunk in resolved_chunks:
@@ -265,19 +292,32 @@ def create_chat_message(
             context_lines.append(f"[chunk_id={chunk_identifier}] {chunk_content}")
     context: str = "\n".join(context_lines).strip()
     
-    # Prompt per AG con vincolo di uso esclusivo del contesto
-    parser = PydanticOutputParser(pydantic_object=AnswerWithCitations)
+    # Story 7.1: Choose prompt and parser based on feature flags
+    if settings.enable_enhanced_response_model:
+        parser = PydanticOutputParser(pydantic_object=EnhancedAcademicResponse)
+    else:
+        parser = PydanticOutputParser(pydantic_object=AnswerWithCitations)
+    
     format_instructions = parser.get_format_instructions()
-    prompt = ChatPromptTemplate.from_messages([
-        (
-            "system",
-            "Sei un assistente che risponde SOLO usando il CONTEXT fornito. "
-            "Se l'informazione non è nel CONTEXT, rispondi 'Non trovato nel contesto'. "
-            "Includi le citazioni degli ID dei chunk usati e restituisci la risposta "
-            "rispettando esattamente questo formato:\n{format_instructions}",
-        ),
-        ("user", "CONTEXT:\n{context}\n\nDOMANDA:\n{question}"),
-    ]).partial(format_instructions=format_instructions)
+    
+    if settings.enable_academic_prompt:
+        # Story 7.1 AC1: Academic medical prompt
+        system_prompt = ACADEMIC_MEDICAL_SYSTEM_PROMPT
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", system_prompt),
+            ("user", "{question}"),
+        ]).partial(
+            format_instructions=format_instructions,
+            context=context,
+            conversation_history=conversation_history,
+        )
+    else:
+        # Baseline prompt (backward compatibility)
+        system_prompt = BASELINE_PROMPT
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", system_prompt),
+            ("user", "CONTEXT:\n{context}\n\nDOMANDA:\n{question}"),
+        ]).partial(format_instructions=format_instructions)
 
     message_id = str(uuid4())
     answer_value: Optional[str] = None
@@ -297,13 +337,56 @@ def create_chat_message(
             llm = get_llm(settings)
             chain: Runnable = prompt | llm | parser
             gen_started_at = time.time()
-            result: AnswerWithCitations = chain.invoke({
-                "question": user_message,
-                "context": context,
-            })
+            
+            # Story 7.1: Invoke with appropriate parameters
+            if settings.enable_academic_prompt:
+                result = chain.invoke({
+                    "question": user_message,
+                })
+            else:
+                result = chain.invoke({
+                    "question": user_message,
+                    "context": context,
+                })
+            
             generation_time_ms = int((time.time() - gen_started_at) * 1000)
-            answer_value = getattr(result, "risposta", None)
-            citations_value = getattr(result, "citazioni", None)
+            
+            # Story 7.1: Extract answer and citations based on model type
+            if settings.enable_enhanced_response_model:
+                # EnhancedAcademicResponse model
+                answer_value = getattr(result, "spiegazione_dettagliata", None)
+                if not answer_value:
+                    # Fallback: build from all fields
+                    parts = []
+                    if hasattr(result, "introduzione") and result.introduzione:
+                        parts.append(result.introduzione)
+                    if hasattr(result, "concetti_chiave") and result.concetti_chiave:
+                        parts.append("Concetti chiave: " + ", ".join(result.concetti_chiave))
+                    if hasattr(result, "spiegazione_dettagliata") and result.spiegazione_dettagliata:
+                        parts.append(result.spiegazione_dettagliata)
+                    if hasattr(result, "note_cliniche") and result.note_cliniche:
+                        parts.append("Note cliniche: " + result.note_cliniche)
+                    answer_value = "\n\n".join(parts)
+                
+                # Extract citations from EnhancedAcademicResponse
+                citations_metadata = getattr(result, "citazioni", [])
+                citations_value = [c.chunk_id for c in citations_metadata if hasattr(c, "chunk_id")]
+                
+                # Log enhanced response metadata
+                logger.info({
+                    "event": "enhanced_response_generated",
+                    "session_id": sessionId,
+                    "has_clinical_notes": hasattr(result, "note_cliniche") and bool(result.note_cliniche),
+                    "has_limitations": hasattr(result, "limitazioni_contesto") and bool(result.limitazioni_contesto),
+                    "concepts_count": len(result.concetti_chiave) if hasattr(result, "concetti_chiave") else 0,
+                    "citations_count": len(citations_value),
+                    "confidenza": getattr(result, "confidenza_risposta", None),
+                })
+            else:
+                # Baseline AnswerWithCitations model
+                answer_value = getattr(result, "risposta", None)
+                citations_value = getattr(result, "citazioni", None)
+                
         except Exception as exc:  # noqa: BLE001 - fallback per ambienti senza LLM
             citations_value = []
             for chunk in resolved_chunks:
@@ -323,6 +406,28 @@ def create_chat_message(
 
     answer_value = (answer_value or "").strip() or "Non trovato nel contesto"
     citations_value = citations_value or []
+
+    # Story 7.1: Save conversation turn if conversational memory enabled
+    if settings.enable_conversational_memory and context_window is not None:
+        conv_manager = get_conversation_manager(
+            max_turns=settings.conversation_max_turns,
+            max_tokens=settings.conversation_max_tokens,
+            compact_length=settings.conversation_message_compact_length,
+        )
+        conv_manager.add_turn(
+            sessionId,
+            user_message,
+            answer_value,
+            citations_value,
+        )
+        
+        logger.info({
+            "event": "conversation_turn_saved",
+            "session_id": sessionId,
+            "turn_number": len(chat_messages_store.get(sessionId, [])) // 2,
+            "user_msg_length": len(user_message),
+            "assistant_msg_length": len(answer_value),
+        })
 
     # Persistenza minima in memoria per la sessione
     # Arricchisci citazioni con metadati minimi per popover

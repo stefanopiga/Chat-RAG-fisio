@@ -155,6 +155,40 @@ class Settings(BaseSettings):
         description="Optional override for ingestion watcher temporary directory",
     )
     
+    # Story 7.1: Academic Conversational RAG feature flags
+    enable_enhanced_response_model: bool = Field(
+        default=False,
+        description="Story 7.1: Enable structured academic response model",
+    )
+    enable_conversational_memory: bool = Field(
+        default=False,
+        description="Story 7.1: Enable conversational memory (3 turns context window)",
+    )
+    enable_academic_prompt: bool = Field(
+        default=False,
+        description="Story 7.1: Enable academic medical prompt (medico fisioterapista persona)",
+    )
+    
+    # Story 7.1: Conversation configuration
+    conversation_max_turns: int = Field(
+        default=3,
+        ge=1,
+        le=10,
+        description="Story 7.1: Maximum conversation turns to keep in context (default 3 = 6 messages)",
+    )
+    conversation_max_tokens: int = Field(
+        default=2000,
+        ge=500,
+        le=8000,
+        description="Story 7.1: Maximum tokens for conversation context window",
+    )
+    conversation_message_compact_length: int = Field(
+        default=150,
+        ge=50,
+        le=500,
+        description="Story 7.1: Maximum character length for compacted older messages",
+    )
+    
     # Validatori custom
     @field_validator('supabase_url')
     @classmethod
