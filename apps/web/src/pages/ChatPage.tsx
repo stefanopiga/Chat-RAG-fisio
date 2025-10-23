@@ -103,10 +103,10 @@ const ChatPage: React.FC = () => {
       )}
 
       {/* Chat messages - scroll area che cresce */}
-      <div className="flex-1 overflow-y-auto p-4">
-        <div className="max-w-[800px] mx-auto">
+      <div className="flex-1 p-4 flex flex-col">
+        <div className="max-w-[800px] mx-auto w-full flex-1 flex flex-col">
           <div
-            className="min-h-[500px] rounded-lg border border-border bg-card p-3 text-card-foreground"
+            className="flex-1 rounded-lg border border-border bg-card p-3 text-card-foreground overflow-y-auto"
             data-testid="chat-messages-container"
           >
             <ChatMessagesList messages={messages} loading={loading} />
