@@ -19,7 +19,7 @@ if ! command -v detect-secrets >/dev/null 2>&1; then
   exit 127
 fi
 
-trufflehog filesystem --no-update --json . \
+trufflehog filesystem --json . \
   | tee "${TRUFFLE_OUT}" \
   | python - <<'PY' > "${CI_LOG}"
 import json
